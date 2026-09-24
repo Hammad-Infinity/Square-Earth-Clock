@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Square Glow Watch</title>
+<style>
+  :root{ --bg-a:#12151c; --bg-b:#0b0d12; }
+  html,body{height:100%;margin:0;}
+  body{
+    background:radial-gradient(circle at 50% 45%, var(--bg-a), var(--bg-b) 70%);
+    display:flex;align-items:center;justify-content:center;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    box-sizing:border-box;
+    transition:background .4s ease;
+  }
+  #face{
+    width:min(92vw,92vh,520px);
+    height:min(92vw,92vh,520px);
+    display:block;
+    cursor:pointer;
+  }
+  #themeBtn{
+    position:fixed; top:calc(env(safe-area-inset-top,0px) + 16px); right:16px;
+    width:38px; height:38px; border-radius:50%;
+    border:1px solid rgba(255,255,255,0.15);
+    background:rgba(255,255,255,0.08);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; padding:0; transition:background .3s ease, border-color .3s ease, color .3s ease;
+  }
+  #themeBtn svg{ width:18px; height:18px; }
+</style>
+</head>
+<body>
+<svg id="face" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="1.1" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+<button id="themeBtn" aria-label="Toggle theme">
+  <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></svg>
+</button>
+<script>
+(function(){
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.getElementById('face');
+  const body = document.body;
+  const themeBtn = document.getElementById('themeBtn');
+  const themeIcon = document.getElementById('themeIcon');
+  const CX = 100, CY = 100, MAXHALF = 88;
+
+  const FAMILIES = { hour:{n:12}, min:{n:60}, sec:{n:60} };
+
+  const PALETTES = {
+    dark: {
+      bgA:'#12151c', bgB:'#0b0d12', tick:'rgba(255,255,255,0.18)',
+      btnBg:'rgba(255,255,255,0.08)', btnBorder:'rgba(255,255,255,0.15)', icon:'#f7f7f5',
+      hour:{dim:'rgba(255,255,255,0.07)', bright:'#f7f7f5'},
+      min: {dim:'rgba(255,207,63,0.05)',  bright:'#ffcf3f'},
+      sec: {dim:'rgba(73,211,255,0.05)',  bright:'#49d3ff'}
+    },
+    light: {
+      bgA:'#ffffff', bgB:'#e9ecf2', tick:'rgba(20,20,35,0.22)',
+      btnBg:'rgba(0,0,0,0.05)', btnBorder:'rgba(0,0,0,0.12)', icon:'#17181c',
+      hour:{dim:'rgba(20,20,35,0.12)', bright:'#17181c'},
+      min: {dim:'rgba(190,130,0,0.14)', bright:'#b8790a'},
+      sec: {dim:'rgba(0,110,150,0.14)', bright:'#0077a3'}
+    }
+  };
+
+  const ICONS = {
+    sun: '<circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"/><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"/>',
+    moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'
+  };
+
+  let theme = 'dark';
+  const pal = () => PALETTES[theme];
+
+  const rects = {}, highlight = {}, activeIdx = {}, ticks = [];
+
+  function mkRect(){ const r=document.createElementNS(NS,'rect'); r.setAttribute('fill','none'); return r; }
+  function setSquare(r, half, stroke, width){
+    r.setAttribute('x', CX-half); r.setAttribute('y', CY-half);
+    r.setAttribute('width', half*2); r.setAttribute('height', half*2);
+    r.setAttribute('stroke', stroke); r.setAttribute('stroke-width', width);
+  }
+  function pointOnSquare(angleDeg, half){
+    const a=angleDeg*Math.PI/180, dx=Math.sin(a), dy=-Math.cos(a);
+    const t=half/Math.max(Math.abs(dx),Math.abs(dy));
+    return [dx*t, dy*t];
+  }
+  function distAlong(x,y,half){
+    if (y <= -half+1e-6) return x+half;
+    if (x >= half-1e-6) return 2*half+(y+half);
+    if (y >= half-1e-6) return 4*half+(half-x);
+    return 6*half+(half-y);
+  }
+
+  function build(){
+    Object.keys(FAMILIES).forEach(fam=>{
+      const n = FAMILIES[fam].n;
+      rects[fam]=[];
+      for(let i=1;i<=n;i++){
+        const half=(i/n)*MAXHALF;
+        const r=mkRect();
+        setSquare(r, half, pal()[fam].dim, 0.5);
+        svg.appendChild(r);
+        rects[fam].push(r);
+      }
+      const g=mkRect();
+      g.setAttribute('filter','url(#glow)');
+      g.setAttribute('stroke-linecap','round');
+      svg.appendChild(g);
+      highlight[fam]=g;
+      activeIdx[fam]=0;
+    });
+
+    // Non-text reference ticks around the outer edge, one per hour;
+    // every third one (12/3/6/9) drawn a touch longer, like a plain clock.
+    for(let h=1;h<=12;h++){
+      const cardinal = h%3===0;
+      const inner = MAXHALF+2, outer = MAXHALF+(cardinal?8:5);
+      const [x1,y1]=pointOnSquare(h*30, inner);
+      const [x2,y2]=pointOnSquare(h*30, outer);
+      const line=document.createElementNS(NS,'line');
+      line.setAttribute('x1',CX+x1); line.setAttribute('y1',CY+y1);
+      line.setAttribute('x2',CX+x2); line.setAttribute('y2',CY+y2);
+      line.setAttribute('stroke-width', cardinal?1.3:0.8);
+      line.setAttribute('stroke-linecap','round');
+      svg.appendChild(line);
+      ticks.push(line);
+    }
+  }
+
+  // Only the small hand-segment ever glows; the 132 base squares stay dim
+  // during normal timekeeping (they only light up during the click ripple).
+  function updateFamily(fam, idx, angleDeg){
+    const cfg = pal()[fam];
+    const half = (idx/FAMILIES[fam].n)*MAXHALF;
+    const g = highlight[fam];
+    const changed = activeIdx[fam] !== idx;
+    activeIdx[fam] = idx;
+
+    const place = () => {
+      const [x,y]=pointOnSquare(angleDeg, half);
+      const d=distAlong(x,y,half);
+      const P=8*half;
+      const seg=Math.max(2, half*0.4);
+      setSquare(g, half, cfg.bright, 1.3);
+      g.setAttribute('stroke-dasharray', seg+' '+(P-seg));
+      g.setAttribute('stroke-dashoffset', -(d-seg/2));
+    };
+
+    if (changed){
+      // Jumping to a different-sized square: fade out, reposition, fade in.
+      g.style.transition='opacity 220ms ease';
+      g.style.opacity=0;
+      setTimeout(()=>{ place(); g.style.opacity=1; }, 220);
+    } else {
+      // Same square: glide smoothly to the new angle.
+      g.style.transition='stroke-dashoffset 260ms linear';
+      place();
+    }
+  }
+
+  function tick(){
+    const now=new Date();
+    const H=now.getHours()%12, m=now.getMinutes(), s=now.getSeconds();
+    let hIdx=H; if(hIdx===0) hIdx=12;
+    updateFamily('hour', hIdx, (H+m/60)*30);
+    const mIdx = m===0?60:m;
+    updateFamily('min', mIdx, m*6+s*0.1);
+    const sIdx = s===0?60:s;
+    updateFamily('sec', sIdx, s*6);
+  }
+
+  // Click the face: a wave of light sweeps outward through every nested
+  // square (smallest to largest), then sweeps back in.
+  function ripple(){
+    const all=[];
+    Object.keys(rects).forEach(fam=>{
+      rects[fam].forEach((r,i)=> all.push({r, fam}));
+    });
+    all.sort((a,b)=> parseFloat(a.r.getAttribute('width')) - parseFloat(b.r.getAttribute('width')));
+    const n=all.length, outDur=900, inDur=900;
+    const stepOut=outDur/n, stepIn=inDur/n;
+    all.forEach((item,i)=>{
+      const el=item.r, c=pal()[item.fam];
+      const delayOut=i*stepOut;
+      const delayIn=outDur+(n-1-i)*stepIn;
+      el.style.transition='stroke 140ms ease';
+      setTimeout(()=>{ el.setAttribute('stroke', c.bright); }, delayOut);
+      setTimeout(()=>{ el.setAttribute('stroke', c.dim); }, delayOut+160);
+      setTimeout(()=>{ el.setAttribute('stroke', c.bright); }, delayIn);
+      setTimeout(()=>{ el.setAttribute('stroke', c.dim); }, delayIn+160);
+    });
+  }
+
+  function applyTheme(){
+    const p = pal();
+    body.style.setProperty('--bg-a', p.bgA);
+    body.style.setProperty('--bg-b', p.bgB);
+    Object.keys(rects).forEach(fam=> rects[fam].forEach(r=> r.setAttribute('stroke', p[fam].dim)));
+    ticks.forEach(t=> t.setAttribute('stroke', p.tick));
+    themeBtn.style.background = p.btnBg;
+    themeBtn.style.borderColor = p.btnBorder;
+    themeBtn.style.color = p.icon;
+    themeIcon.innerHTML = theme==='dark' ? ICONS.sun : ICONS.moon;
+    tick();
+  }
+
+  svg.addEventListener('click', ripple);
+  themeBtn.addEventListener('click', ()=>{
+    theme = theme==='dark' ? 'light' : 'dark';
+    applyTheme();
+  });
+
+  build();
+  applyTheme();
+  setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>
