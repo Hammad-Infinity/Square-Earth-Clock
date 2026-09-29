@@ -2,6 +2,8 @@
 
 A single-file, dependency-free analog clock rendered in SVG. Time is displayed through nested square outlines that grow from the center, with glowing hands and a click-triggered light ripple. Watch [Demo](https://hammad-infinity.github.io/Square-Earth-Clock/).
 
+![Square Clock preview](docs/preview.png)
+
 ## Features
 
 - Nested square rings for hours, minutes, and seconds
